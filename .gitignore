@@ -1,0 +1,24 @@
+# General
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.idea/
+.vscode/
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment files
+.env
+
+# Streamlit files
+.streamlit/
+
+# Local development
+instance/
+.webassets-cache
