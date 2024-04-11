@@ -4,6 +4,10 @@ from openai import OpenAI
 import os
 from sentence_transformers import SentenceTransformer
 
+
+# Set environment variable for TOKENIZERS_PARALLELISM
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 # Load environment variables
 openai_api_key = st.secrets['OPENAI_API_KEY'] #os.getenv('OPENAI_API_KEY')
 qdrant_api_key = st.secrets['qdrant_api_key'] #os.getenv('qdrant_api_key')
