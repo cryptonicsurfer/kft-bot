@@ -22,3 +22,4 @@ venv/
 # Local development
 instance/
 .webassets-cache
+kft_app_local_Embed.py

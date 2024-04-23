@@ -29,7 +29,8 @@ def search_collection(qdrant_client, collection_name, user_query_embedding):
         collection_name=collection_name,
         query_vector=user_query_embedding,
         limit=3,  # Adjust based on needs
-        with_payload=True
+        with_payload=True,
+        score_threshold = 0.6
     )
     # Directly return the response or the relevant part of it
     return response  # Adjust this line if the structure is different
@@ -71,7 +72,17 @@ if submit_button and user_input:
         for result in search_results
     ]
     
-    instructions_prompt = f'Givet denna fråga: {user_input} och kontexten från en databas: {search_results}, sammanställ relevant fakta på ett lättläst sätt, samt ge ett utkast på hur ett svar skulle kunna se ut. Ditt svar riktas till en anställd på kommunen och skall utgöra ett stöd för den antsällde att återkoppla direkt till den som ställer frågan. Innehåller {user_input} både en fråga och synpunkt eller klagomål, addreserar du båda utifrån din fakta. Om du har fått rätt kontext i form av fakta för att ge ett korrekt svar så skriver du det, om inte så skriver du att kommunen har tagit emot synpunkten och diariefört den men att det inte är säkert att det finns resurser att prioritera just denna fråga. Svar ges i Markdown (md) format.'
+    if similar_texts:  # Ensure there are results
+        with st.expander("Se relevanta källor"):
+            for index, (text, source, score) in enumerate(similar_texts):
+                st.write(f"Resultat {index + 1}:")
+                st.write("Källa:", source)  # Display the source
+                st.write("Träffsäkerhet:", score)  # Display the score
+                st.write(f"Text från dokument:\n {text}")#, text)  # Display the text
+                st.write("---")  # Optional: add a separator line for better readability
+
+
+    instructions_prompt = f'Givet denna fråga: {user_input} och kontexten från en databas: {search_results}, sammanställ relevant fakta på ett lättläst sätt, samt ge ett utkast på hur ett svar skulle kunna se ut. Ditt svar riktas till en anställd på kommunen och skall utgöra ett stöd för den antsällde att återkoppla direkt till den som ställer frågan. Innehåller {user_input} både en fråga och synpunkt eller klagomål, addreserar du båda utifrån din fakta. Om du har fått rätt kontext i form av fakta för att ge ett korrekt svar så skriver du det, om inte så skriver du att kommunen har tagit emot synpunkten och diariefört den men att det inte är säkert att det finns resurser att prioritera just denna fråga. Inkludera källa för ditt svar. Svara vänligt men kortfattat.'
     
     # Stream or display the GPT-4 reply based on instructions_prompt
     answer = get_chat_response_streaming(user_input, instructions_prompt)
