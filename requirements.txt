@@ -3,3 +3,5 @@ openai
 python-dotenv
 sentence-transformers
 streamlit
+requests
+st-star-rating
