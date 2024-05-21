@@ -24,3 +24,4 @@ instance/
 .webassets-cache
 kft_app_local_Embed.py
 kft_app_KBLAB.py
+kft_groq.py
