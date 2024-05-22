@@ -25,7 +25,7 @@ def search_collection(qdrant_client, collection_name, user_query_embedding):
     response = qdrant_client.search(collection_name=collection_name, query_vector=user_query_embedding, limit=5, with_payload=True) #score_threshold=0.4)
     return response
 
-def get_chat_response_streaming(user_message, instructions_prompt, model="gpt-4-turbo-preview", client=None):
+def get_chat_response_streaming(user_message, extra_knowledge, instructions_prompt, model="gpt-4-turbo-preview", client=None):
     if client is None:
         client = OpenAI(api_key=openai_api_key)
     full_response = ""
@@ -37,7 +37,7 @@ def get_chat_response_streaming(user_message, instructions_prompt, model="gpt-4-
             st.session_state['response_completed']=True
             message_placeholder.markdown(full_response)
                 # directus post    
-            data={"prompt":user_message, "response": full_response}
+            data={"prompt":user_message, "instruction_prompt": extra_knowledge, "response": full_response}
             directus_response = requests.post(directus_api_url, json=data, params=directus_params)
             if directus_response.status_code == 200:
                 response_data = directus_response.json()
@@ -60,14 +60,16 @@ def format_output(similar_texts, answer):
     return text
 
 st.title("Demo KFT - utkastsgenererare")
-st.write(collection_name)
+# st.write(collection_name)
 with st.form(key='user_query_form', clear_on_submit=True):
     user_input = st.text_input("Klistra in fråga/klagomål från invånare här:", key="user_input")
     st.caption("Svaren genereras av en AI-bot, som kan begå misstag. Frågor och svar lagras i utvecklingssyfte. Skriv inte personuppgifter i fältet.")
-    submit_button = st.form_submit_button("Sök")
+    extra_knowledge = st.text_input("Klistra in extra kontext/kunskap/fakta/instruktioner här:", key="extra_knowledge")
+    input_to_embed = user_input + extra_knowledge
+    submit_button = st.form_submit_button("Genera utkast till svar 🪄")
 
 if submit_button and user_input:
-    user_embedding = generate_embeddings(user_input)
+    user_embedding = generate_embeddings(input_to_embed)
     search_results = search_collection(qdrant_client, collection_name, user_embedding)
     similar_texts = [(result.payload['text'], result.payload['file_source'], result.score) for result in search_results]
     
@@ -80,11 +82,14 @@ if submit_button and user_input:
                 st.write(f"Text från dokument:\n{text}")
                 st.write("---")
 
+    # Construct an instructions prompt using the user input and search results
     instructions_prompt = f"""
-    Givet denna fråga: {user_input} och kontexten från en databas: {search_results}, sammanställ relevant fakta på ett lättläst sätt, samt ge ett utkast på hur ett svar skulle kunna se ut. Ditt svar riktas till en anställd på kommunen och skall utgöra ett stöd för den antsällde att återkoppla direkt till den som ställer frågan. Innehåller {user_input} både en fråga och synpunkt eller klagomål, addreserar du båda utifrån din fakta. Om du har fått rätt kontext i form av fakta för att ge ett korrekt svar så skriver du det, om inte så skriver du att kommunen har tagit emot synpunkten och diariefört den men att det inte är säkert att det finns resurser att prioritera just denna fråga. Inkludera källa för ditt svar. Svara vänligt men kortfattat.
+    Givet denna invånar-fråga: '{user_input}', samt om det finns ytterligare information från anställd i kommunen 'extra-instruktioner':{extra_knowledge}, samt kontexten från en databas: {[result.payload['text'] for result in search_results]}, sammanställ relevant fakta på ett lättläst sätt, samt ge ett utkast på hur ett svar skulle kunna se ut. Ditt svar riktas till en anställd på kommunen och skall utgöra ett stöd för den anställde att återkoppla direkt till den som ställer frågan. Innehåller {user_input} både en fråga och synpunkt eller klagomål, adressera du båda utifrån din fakta. Om du har fått rätt kontext i form av fakta för att ge ett korrekt svar så skriver du det, om inte så skriver du att kommunen har tagit emot synpunkten och diariefört den men att det inte är säkert att det finns resurser att prioritera just denna fråga. Inkludera källa för ditt svar. Svara vänligt men kortfattat.
+
+    Ditt svar börjar med: 'Hej Namn', avslutas med: 'Med vänliga hälsningar, [Namn], [Avdelning på kommunen]
     """
 
-    answer = get_chat_response_streaming(user_input, instructions_prompt)
+    answer = get_chat_response_streaming(user_input, extra_knowledge, instructions_prompt)
 
 if 'response_completed' in st.session_state and st.session_state['response_completed']:
 
