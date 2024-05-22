@@ -62,11 +62,12 @@ def format_output(similar_texts, answer):
 st.title("Demo KFT - utkastsgenererare")
 # st.write(collection_name)
 with st.form(key='user_query_form', clear_on_submit=True):
-    user_input = st.text_input("Klistra in fråga/klagomål från invånare här:", key="user_input")
+    user_input = st.text_area("Klistra in fråga/klagomål från invånare här:", key="user_input", height=100)
     st.caption("Svaren genereras av en AI-bot, som kan begå misstag. Frågor och svar lagras i utvecklingssyfte. Skriv inte personuppgifter i fältet.")
-    extra_knowledge = st.text_input("Klistra in extra kontext/kunskap/fakta/instruktioner här:", key="extra_knowledge")
+    extra_knowledge = st.text_area("Klistra in extra kontext/kunskap/fakta/instruktioner här:", key="extra_knowledge", height=100)
     input_to_embed = user_input + extra_knowledge
     submit_button = st.form_submit_button("Genera utkast till svar 🪄")
+
 
 if submit_button and user_input:
     user_embedding = generate_embeddings(input_to_embed)
