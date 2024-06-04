@@ -11,6 +11,7 @@ openai_api_key = st.secrets['OPENAI_API_KEY']
 qdrant_api_key = st.secrets['qdrant_api_key']
 qdrant_url = "https://qdrant.utvecklingfalkenberg.se"
 collection_name = "KFT_knowledge_base_OpenAI_Large_chunk1000"
+collection_name2="FalkenbergsKommunsHemsida_1000char_chunks"
 directus_api_url = "https://nav.utvecklingfalkenberg.se/items/kft_bot"
 directus_params={"access_token":st.secrets['directus_token']}
 
@@ -22,7 +23,7 @@ def generate_embeddings(text):
     return response.data[0].embedding
 
 def search_collection(qdrant_client, collection_name, user_query_embedding):
-    response = qdrant_client.search(collection_name=collection_name, query_vector=user_query_embedding, limit=5, with_payload=True) #score_threshold=0.4)
+    response = qdrant_client.search(collection_name=collection_name, query_vector=user_query_embedding, limit=3 , with_payload=True) #score_threshold=0.4)
     return response
 
 def get_chat_response_streaming(user_message, extra_knowledge, instructions_prompt, model="gpt-4-turbo-preview", client=None):
@@ -72,25 +73,51 @@ with st.form(key='user_query_form', clear_on_submit=True):
 if submit_button and user_input:
     user_embedding = generate_embeddings(input_to_embed)
     search_results = search_collection(qdrant_client, collection_name, user_embedding)
-    similar_texts = [(result.payload['text'], result.payload['file_source'], result.score) for result in search_results]
+    search_results2 = search_collection(qdrant_client, collection_name2, user_embedding)
     
-    if similar_texts:
+    # Kombinera och formatera liknande texter från båda samlingarna
+    combined_results = []
+    for result in search_results:
+        combined_results.append({
+            'text': result.payload['text'],
+            'source': result.payload['file_source'],
+            'score': result.score
+        })
+        
+    for result in search_results2:
+        source_info = f"{result.payload['title']} (URL: {result.payload['url']})"
+        combined_results.append({
+            'text': result.payload['chunk'],
+            'source': source_info,
+            'score': result.score
+        })
+
+    # Sortera kombinerade resultat baserat på poäng i fallande ordning
+    ranked_results = sorted(combined_results, key=lambda x: x['score'], reverse=True)
+
+    if ranked_results:
         with st.expander("Se relevanta källor"):
-            for index, (text, source, score) in enumerate(similar_texts):
+            for index, result in enumerate(ranked_results):
                 st.write(f"Resultat {index + 1}:")
-                st.write("Källa:", source)
-                st.write("Träffsäkerhet:", score)
-                st.write(f"Text från dokument:\n{text}")
+                st.write("Källa:", result['source'])
+                st.write("Träffsäkerhet:", result['score'])
+                st.write(f"Text från dokument:\n{result['text']}")
                 st.write("---")
 
-    # Construct an instructions prompt using the user input and search results
-    instructions_prompt = f"""
-    Givet denna invånar-fråga: '{user_input}', samt om det finns ytterligare information från anställd i kommunen 'extra-instruktioner':{extra_knowledge}, samt kontexten från en databas: {[result.payload['text'] for result in search_results]}, sammanställ relevant fakta på ett lättläst sätt, samt ge ett utkast på hur ett svar skulle kunna se ut. Ditt svar riktas till en anställd på kommunen och skall utgöra ett stöd för den anställde att återkoppla direkt till den som ställer frågan. Innehåller {user_input} både en fråga och synpunkt eller klagomål, adressera du båda utifrån din fakta. Om du har fått rätt kontext i form av fakta för att ge ett korrekt svar så skriver du det, om inte så skriver du att kommunen har tagit emot synpunkten och diariefört den men att det inte är säkert att det finns resurser att prioritera just denna fråga. Inkludera källa för ditt svar. Svara vänligt men kortfattat.
+    # Uppdatera instruktionsprompt med dynamisk kontext från sorterade resultatsatser
+    context_from_db = ", ".join([f"{result['text']}" for result in ranked_results])
 
-    Ditt svar börjar med: 'Hej Namn', avslutas med: 'Med vänliga hälsningar, [Namn], [Avdelning på kommunen]
+    instructions_prompt = f"""
+Givet denna invånar-fråga: '{user_input}', samt om det finns ytterligare information från kommunanställd 'extra-instruktioner': {extra_knowledge}, samt kontexten från en databas: {context_from_db}, sammanställ relevant fakta på ett lättläst sätt, samt ge ett utkast på hur ett svar skulle kunna se ut. Ditt svar riktas till en anställd på kommunen och ska utgöra ett stöd för den anställde att återkoppla direkt till den som ställer frågan. Innehåller {user_input} både en fråga och en synpunkt eller klagomål, adressera du båda utifrån din fakta. Om du har rätt kontext i form av fakta för att ge ett korrekt svar så skriver du det, om inte så skriver du att kommunen har tagit emot synpunkten och diariefört den men att det inte är säkert att det finns resurser att prioritera just denna fråga. Inkludera källa för ditt svar.
+    
+Svara vänligt men kortfattat.
+Ditt svar börjar med: 'Hej Namn,' avslutas med: 'Med vänliga hälsningar, [Namn], [Avdelning på kommunen]'
+Oavsett du har rätt fakta eller inte till invånaren ska du svara koncist, to the point men professionellt artigt. Glöm inte att hänvisa till källa om det finns någon källa.
     """
 
+    # Presume get_chat_response_streaming takes the updated instructions prompt
     answer = get_chat_response_streaming(user_input, extra_knowledge, instructions_prompt)
+
 
 if 'response_completed' in st.session_state and st.session_state['response_completed']:
 

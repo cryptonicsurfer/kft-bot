@@ -26,3 +26,4 @@ kft_app_local_Embed.py
 kft_app_KBLAB.py
 kft_groq.py
 kft_gemini.py
+kft_chat_only_kft_collection.py
