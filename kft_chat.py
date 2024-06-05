@@ -12,6 +12,7 @@ qdrant_api_key = st.secrets['qdrant_api_key']
 qdrant_url = "https://qdrant.utvecklingfalkenberg.se"
 collection_name = "KFT_knowledge_base_OpenAI_Large_chunk1000"
 collection_name2="FalkenbergsKommunsHemsida_1000char_chunks"
+collection_name3="mediawiki"
 directus_api_url = "https://nav.utvecklingfalkenberg.se/items/kft_bot"
 directus_params={"access_token":st.secrets['directus_token']}
 
@@ -26,7 +27,8 @@ def search_collection(qdrant_client, collection_name, user_query_embedding):
     response = qdrant_client.search(collection_name=collection_name, query_vector=user_query_embedding, limit=3 , with_payload=True) #score_threshold=0.4)
     return response
 
-def get_chat_response_streaming(user_message, extra_knowledge, instructions_prompt, model="gpt-4-turbo-preview", client=None):
+#gpt-4-turbo-preview
+def get_chat_response_streaming(user_message, extra_knowledge, instructions_prompt, model="gpt-4o", client=None):
     if client is None:
         client = OpenAI(api_key=openai_api_key)
     full_response = ""
@@ -74,6 +76,8 @@ if submit_button and user_input:
     user_embedding = generate_embeddings(input_to_embed)
     search_results = search_collection(qdrant_client, collection_name, user_embedding)
     search_results2 = search_collection(qdrant_client, collection_name2, user_embedding)
+    search_results3=search_collection(qdrant_client,  collection_name3, user_embedding)
+
     
     # Kombinera och formatera liknande texter från båda samlingarna
     combined_results = []
@@ -81,7 +85,8 @@ if submit_button and user_input:
         combined_results.append({
             'text': result.payload['text'],
             'source': result.payload['file_source'],
-            'score': result.score
+            'score': result.score,
+            'category': 'kft-filer'
         })
         
     for result in search_results2:
@@ -89,7 +94,16 @@ if submit_button and user_input:
         combined_results.append({
             'text': result.payload['chunk'],
             'source': source_info,
-            'score': result.score
+            'score': result.score,
+            'category': 'hemsidan'
+        })
+    
+    for result in search_results3:
+        combined_results.append({
+            'text': result.payload['chunk'],
+            'source': result.payload['title'],
+            'score': result.score,
+            'category': 'interndokumentation'
         })
 
     # Sortera kombinerade resultat baserat på poäng i fallande ordning
@@ -105,7 +119,13 @@ if submit_button and user_input:
                 st.write("---")
 
     # Uppdatera instruktionsprompt med dynamisk kontext från sorterade resultatsatser
-    context_from_db = ", ".join([f"{result['text']}" for result in ranked_results])
+    # context_from_db = ", ".join([f"{result['text']}" for result in ranked_results])
+    # context_from_db = ", ".join([f"{result['text']} (Category: {result['category']})" for result in ranked_results])
+    context_from_db = ", ".join([
+    f"{result['text']} (Category: {result['category']}{', URL: ' + result['source'] if 'url' in result else ''})"
+    for result in ranked_results])
+
+
 
     instructions_prompt = f"""
 Givet denna invånar-fråga: '{user_input}', samt om det finns ytterligare information från kommunanställd 'extra-instruktioner': {extra_knowledge}, samt kontexten från en databas: {context_from_db}, sammanställ relevant fakta på ett lättläst sätt, samt ge ett utkast på hur ett svar skulle kunna se ut. Ditt svar riktas till en anställd på kommunen och ska utgöra ett stöd för den anställde att återkoppla direkt till den som ställer frågan. Innehåller {user_input} både en fråga och en synpunkt eller klagomål, adressera du båda utifrån din fakta. Om du har rätt kontext i form av fakta för att ge ett korrekt svar så skriver du det, om inte så skriver du att kommunen har tagit emot synpunkten och diariefört den men att det inte är säkert att det finns resurser att prioritera just denna fråga. Inkludera källa för ditt svar.
