@@ -4,6 +4,9 @@ from qdrant_client import QdrantClient
 from openai import OpenAI
 import os
 from streamlit_star_rating import st_star_rating
+import datetime
+
+current_date = datetime.date.today()
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -79,35 +82,41 @@ if submit_button and user_input:
     search_results3=search_collection(qdrant_client,  collection_name3, user_embedding)
 
     
-    # Kombinera och formatera liknande texter från båda samlingarna
     combined_results = []
+
+    # Handling search_results1
     for result in search_results:
         combined_results.append({
-            'text': result.payload['text'],
-            'source': result.payload['file_source'],
+            'text': result.payload['text'],  # Using text for content
+            'source': result.payload['file_source'],  # Using file_source as source
             'score': result.score,
             'category': 'kft-filer'
         })
         
+    # Handling search_results2
     for result in search_results2:
         source_info = f"{result.payload['title']} (URL: {result.payload['url']})"
         combined_results.append({
-            'text': result.payload['chunk'],
-            'source': source_info,
+            'text': result.payload['chunk'],  # Using chunk for content
+            'source': source_info,  # Combining title and url for source
             'score': result.score,
             'category': 'hemsidan'
         })
-    
+
+    # Handling search_results3
     for result in search_results3:
         combined_results.append({
-            'text': result.payload['chunk'],
-            'source': result.payload['title'],
+            'text': result.payload['chunk'],  # Using chunk for content
+            'source': result.payload['title'],  # Using title as source
             'score': result.score,
             'category': 'interndokumentation'
         })
 
-    # Sortera kombinerade resultat baserat på poäng i fallande ordning
+    # Sorting combined results based on score in descending order
     ranked_results = sorted(combined_results, key=lambda x: x['score'], reverse=True)
+
+
+
 
     if ranked_results:
         with st.expander("Se relevanta källor"):
@@ -121,22 +130,29 @@ if submit_button and user_input:
     # Uppdatera instruktionsprompt med dynamisk kontext från sorterade resultatsatser
     # context_from_db = ", ".join([f"{result['text']}" for result in ranked_results])
     # context_from_db = ", ".join([f"{result['text']} (Category: {result['category']})" for result in ranked_results])
+    # Constructing context_from_db
     context_from_db = ", ".join([
-    f"{result['text']} (Category: {result['category']}{', URL: ' + result['source'] if 'url' in result else ''})"
-    for result in ranked_results])
+        f"{result['text']} (Category: {result['category']}, Source: {result['source']})"
+        for result in ranked_results])
 
 
 
     instructions_prompt = f"""
 Givet denna invånar-fråga: '{user_input}', samt om det finns ytterligare information från kommunanställd 'extra-instruktioner': {extra_knowledge}, samt kontexten från en databas: {context_from_db}, sammanställ relevant fakta på ett lättläst sätt, samt ge ett utkast på hur ett svar skulle kunna se ut. Ditt svar riktas till en anställd på kommunen och ska utgöra ett stöd för den anställde att återkoppla direkt till den som ställer frågan. Innehåller {user_input} både en fråga och en synpunkt eller klagomål, adressera du båda utifrån din fakta. Om du har rätt kontext i form av fakta för att ge ett korrekt svar så skriver du det, om inte så skriver du att kommunen har tagit emot synpunkten och diariefört den men att det inte är säkert att det finns resurser att prioritera just denna fråga. Inkludera källa för ditt svar.
+
+Ibland kan du få in information som säger 'i år bla bla', men texten är äldre då den kan vara publicerad som en nyhet. Känn till dagens datum: {current_date}, så kan du själv avgöra om texten är helt aktuell, eller åtminstone referera till eventuellt datum i ditt svar. Till exempel kan man istället för att säga 'i år', så hade man kunnat skriva det aktuella datumet.
     
 Svara vänligt men kortfattat.
 Ditt svar börjar med: 'Hej Namn,' avslutas med: 'Med vänliga hälsningar, [Namn], [Avdelning på kommunen]'
-Oavsett du har rätt fakta eller inte till invånaren ska du svara koncist, to the point men professionellt artigt. Glöm inte att hänvisa till källa om det finns någon källa.
-    """
+Oavsett du har rätt fakta eller inte till invånaren ska du svara koncist, to the point men professionellt artigt. Du måste hänvisa till källan du baserar ditt svar. Finns det kontaktpersoner och kontaktuppgifter, inkludera gärna dessa. Skriv gärna hur många av de underlag som du fick till dig som du använt för ditt svar. 
+
+"""
 
     # Presume get_chat_response_streaming takes the updated instructions prompt
     answer = get_chat_response_streaming(user_input, extra_knowledge, instructions_prompt)
+    # print(ranked_results)
+    # print('_'*30)
+    # print(context_from_db)
 
 
 if 'response_completed' in st.session_state and st.session_state['response_completed']:
