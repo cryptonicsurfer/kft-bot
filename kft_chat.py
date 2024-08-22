@@ -77,7 +77,7 @@ with st.form(key='user_query_form', clear_on_submit=True):
 
 if submit_button and user_input:
     user_embedding = generate_embeddings(input_to_embed)
-    search_results = search_collection(qdrant_client, collection_name, user_embedding)
+    # search_results = search_collection(qdrant_client, collection_name, user_embedding)
     search_results2 = search_collection(qdrant_client, collection_name2, user_embedding)
     search_results3=search_collection(qdrant_client,  collection_name3, user_embedding)
 
@@ -85,13 +85,13 @@ if submit_button and user_input:
     combined_results = []
 
     # Handling search_results1
-    for result in search_results:
-        combined_results.append({
-            'text': result.payload['text'],  # Using text for content
-            'source': result.payload['file_source'],  # Using file_source as source
-            'score': result.score,
-            'category': 'kft-filer'
-        })
+    # for result in search_results:
+    #     combined_results.append({
+    #         'text': result.payload['text'],  # Using text for content
+    #         'source': result.payload['file_source'],  # Using file_source as source
+    #         'score': result.score,
+    #         'category': 'kft-filer'
+    #     })
         
     # Handling search_results2
     for result in search_results2:
