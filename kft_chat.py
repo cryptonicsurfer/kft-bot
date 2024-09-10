@@ -77,12 +77,12 @@ with st.form(key='user_query_form', clear_on_submit=False):
     user_input = st.text_area("Klistra in fråga/klagomål från invånare här:", key="user_input", height=100)
     st.caption("Svaren genereras av en AI-bot, som kan begå misstag. Frågor och svar lagras i utvecklingssyfte. Skriv inte personuppgifter i fältet.")
     extra_knowledge = st.text_area("Klistra in extra kontext/kunskap/fakta/instruktioner här:", key="extra_knowledge", height=100, placeholder="Hänvisa till Falkenbergs kommuns bestämmelser för stöd till föreningsvlivet och bla bla bla")
-    
+
     # Add checkboxes for collection selection
     st.write("Välj vilka samlingar som ska användas för sökning:")
     use_hemsidan = st.checkbox("Falkenbergs kommuns hemsida", value=True, key="use_hemsidan")
     use_mediawiki = st.checkbox("MediaWiki - KFT: Intern dokumentation", value=True, key="use_mediawiki")
-    
+
     input_to_embed = user_input + extra_knowledge
     submit_button = st.form_submit_button("Genera utkast till svar 🪄")
 
@@ -133,10 +133,10 @@ if submit_button and user_input:
 Givet denna invånar-fråga: '{user_input}', samt om det finns ytterligare information från kommunanställd 'extra-instruktioner': {extra_knowledge}, samt kontexten från en databas: {context_from_db}, sammanställ relevant fakta på ett lättläst sätt, samt ge ett utkast på hur ett svar skulle kunna se ut. Ditt svar riktas till en anställd på kommunen och ska utgöra ett stöd för den anställde att återkoppla direkt till den som ställer frågan. Innehåller {user_input} både en fråga och en synpunkt eller klagomål, adressera du båda utifrån din fakta. Om du har rätt kontext i form av fakta för att ge ett korrekt svar så skriver du det, om inte så skriver du att kommunen har tagit emot synpunkten och diariefört den men att det inte är säkert att det finns resurser att prioritera just denna fråga. Inkludera källa för ditt svar.
 
 Ibland kan du få in information som säger 'i år bla bla', men texten är äldre då den kan vara publicerad som en nyhet. Känn till dagens datum: {current_date}, så kan du själv avgöra om texten är helt aktuell, eller åtminstone referera till eventuellt datum i ditt svar. Till exempel kan man istället för att säga 'i år', så hade man kunnat skriva det aktuella datumet.
-    
+
 Svara vänligt men kortfattat.
 Ditt svar börjar med: 'Hej Namn,' avslutas med: 'Med vänliga hälsningar, [Namn], [Avdelning på kommunen]'
-Oavsett du har rätt fakta eller inte till invånaren ska du svara koncist, to the point men professionellt artigt. Du måste hänvisa till källan du baserar ditt svar. Finns det kontaktpersoner och kontaktuppgifter, inkludera gärna dessa. Skriv gärna hur många av de underlag som du fick till dig som du använt för ditt svar. 
+Oavsett du har rätt fakta eller inte till invånaren ska du svara koncist, to the point men professionellt artigt. Du måste hänvisa till källan du baserar ditt svar. Finns det kontaktpersoner och kontaktuppgifter, inkludera gärna dessa. Skriv gärna hur många av de underlag som du fick till dig som du använt för ditt svar.
 
 Observera att följande samlingar användes för sökningen: {', '.join(used_collections)}.
 """

@@ -16,6 +16,9 @@ venv/
 # Environment files
 .env
 
+# Config files
+pyrightconfig.json
+
 # Streamlit files
 .streamlit/
 
@@ -28,3 +31,5 @@ kft_groq.py
 kft_gemini.py
 kft_chat_only_kft_collection.py
 kft_chat_new_system_prompt.py
+2_kft_chat.py
+org_kft_chat.py

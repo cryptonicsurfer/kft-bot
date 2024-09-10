@@ -7,9 +7,10 @@ import json
 # Set page config
 st.set_page_config(page_title="AI Chat with Qdrant Search", layout="wide")
 
+
 # Set up OpenAI and Qdrant clients
-openai_client = OpenAI(api_key=st.secrets["openai_api_key"])
-qdrant_client = QdrantClient(url=st.secrets["qdrant_url"], api_key=st.secrets["qdrant_api_key"])
+openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+qdrant_client = QdrantClient(url=st.secrets["qdrant_url"], port=443, api_key=st.secrets["qdrant_api_key"])
 
 # Constants
 GPT_MODEL = "gpt-4o"  # Make sure this is the correct model name
@@ -42,11 +43,13 @@ def search_collection(qdrant_client, collection_name, user_query_embedding, limi
 # Tool call function
 def search_qdrant(user_input: str, collection_name: str, limit: int = 5):
     print('search qdrant', user_input)
+    print('\n\n')
+    print('collection name', collection_name)
     user_query_embedding = generate_embeddings(user_input)
     print('embeddings done')
     if user_query_embedding is None:
         return []
-    
+
     results = search_collection(qdrant_client, collection_name, user_query_embedding, limit)
     print('search collection done', results)
     formatted_results = []
@@ -55,7 +58,7 @@ def search_qdrant(user_input: str, collection_name: str, limit: int = 5):
             "score": result.score,
             "payload": result.payload
         })
-    
+
     return formatted_results
 
 # Set up tools
@@ -147,91 +150,83 @@ with st.sidebar:
 # Create two columns
 col1, col2 = st.columns(2)
 
-# Column 1: Chat interface
+# Column 1: Chat interface with scrolling
 with col1:
     st.subheader("Chat")
-    
-    # Display chat messages
     chat_container = st.container()
-    with chat_container:
-        for message in st.session_state.messages:
+
+    # Wrap the chat content in a scrollable div
+    st.markdown('<div class="scrollable-column">', unsafe_allow_html=True)
+
+    for message in st.session_state.messages:
+        if message["role"] != "function":
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-# Column 2: Display last letter
-with col2:
-    st.subheader("Last Draft Letter")
-    if st.session_state['last_letter']:
-        st.markdown(st.session_state['last_letter'])
-    else:
-        st.write("No draft letter to display yet.")
+    # Close the scrollable div
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# Chat input at the bottom
-with col1:
+    # Chat input at the bottom of col1
     user_input = st.chat_input("Type your message here:")
-    
-    if user_input:
-        # Add user message to chat history
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        
-        # Display user message
-        with chat_container.chat_message("user"):
-            st.markdown(user_input)
 
-        # Generate AI response
-        with chat_container.chat_message("assistant"):
-            message_placeholder = st.empty()
-            
-            # Prepare messages for the API call
-            messages = [
-                {"role": "system", "content": "You are a helpful AI assistant for Falkenberg municipality. Use the search_qdrant function when you need to find information. When drafting a response for the KFT handläggare, enclose it in <letter></letter> tags."}
-            ] + st.session_state.messages
+# Column 2: Display last letter (fixed)
+with col2:
+    with st.container():
+        st.subheader("Last Draft Letter")
+        letter_container = st.empty()
+        if st.session_state['last_letter']:
+            letter_container.markdown(st.session_state['last_letter'])
+        else:
+            letter_container.write("No draft letter to display yet.")
 
-            # Get the response
-            completion = generate_ai_response(messages)
+# Handle user input and generate AI response
+if user_input:
+    # Add user message to chat history
+    st.session_state.messages.append({"role": "user", "content": user_input})
+
+    # Generate AI response
+    messages = [
+        {"role": "system", "content": "Du är en hjälpsam AI-assistent för Falkenbergs kommun. Använd search_qdrant-funktionen när du behöver hitta information. När du skriver ett utkast till svar för KFT-handläggaren som svar till en invånare, omslut det med <letter></letter>-taggar."}
+    ] + st.session_state.messages
+
+    completion = generate_ai_response(messages)
+    if completion:
+        response_message = completion.choices[0].message
+
+        # Handle function calls
+        if response_message.tool_calls:
+            for tool_call in response_message.tool_calls:
+                if tool_call.function.name == "search_qdrant":
+                    function_args = safe_json_loads(tool_call.function.arguments)
+                    search_results = search_qdrant(**function_args)
+                    st.session_state.messages.append({
+                        "role": "function",
+                        "name": "search_qdrant",
+                        "content": json.dumps(search_results)
+                    })
+                    st.session_state['tool_calls'].append({
+                        "function": "search_qdrant",
+                        "arguments": function_args,
+                        "results": search_results
+                    })
+
+            # Get the final response after function calls
+            completion = generate_ai_response(st.session_state.messages)
             if completion:
                 response_message = completion.choices[0].message
-                
-                # Check for function calls
-                if response_message.tool_calls:
-                    for tool_call in response_message.tool_calls:
-                        if tool_call.function.name == "search_qdrant":
-                            function_args = safe_json_loads(tool_call.function.arguments)
-                            search_results = search_qdrant(**function_args)
-                            print(search_results)
-                            # Add the search results to the messages
-                            st.session_state.messages.append({
-                                "role": "function",
-                                "name": "search_qdrant",
-                                "content": json.dumps(search_results)
-                            })
 
-                            # Add tool call information to the sidebar
-                            st.session_state['tool_calls'].append({
-                                "function": "search_qdrant",
-                                "arguments": function_args,
-                                "results": search_results
-                            })
-                    
-                    # Get the final response after function calls
-                    completion = generate_ai_response(st.session_state.messages)
-                    if completion:
-                        response_message = completion.choices[0].message
+        # Display the final response
+        full_response = response_message.content
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
 
-                # Display the final response
-                full_response = response_message.content
-                message_placeholder.markdown(full_response)
+        # Extract letter if present
+        letter = extract_letter(full_response)
+        if letter:
+            st.session_state['last_letter'] = letter
+            letter_container.markdown(letter)
 
-                # Update chat history with AI response
-                st.session_state.messages.append({"role": "assistant", "content": full_response})
-
-                # Extract letter if present
-                letter = extract_letter(full_response)
-                if letter:
-                    st.session_state['last_letter'] = letter
-
-        # Rerun the app to update the sidebar and chat history
-        st.rerun()
+    # Rerun the app to update the chat history and letter
+    st.rerun()
 
 # Add a button to clear the chat history
 if st.button("Clear Chat History"):
