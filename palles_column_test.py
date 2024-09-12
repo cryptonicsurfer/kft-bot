@@ -1,54 +1,103 @@
 import streamlit as st
+from openai import OpenAI
+import re
 
-set_page_config = st.set_page_config(layout= "wide")
+# Set page config
+st.set_page_config(layout="wide")
 
-# Create custom CSS
-css = """
-<style>
-    [data-testid="column"] {
-        background-color: #e6f3ff;  /* This is now the padding color */
-        border: 1px solid #007bff;
-        border-radius: 5px;
-        padding: 10px;
-    }
-    [data-testid="column"] > div {
-        background-color: #ffffff;  /* This is the fill color for the content area */
-        padding: 10px;
-        border-radius: 3px;
-    }
-</style>
-"""
-
-# Inject custom CSS with st.markdown
-st.markdown(css, unsafe_allow_html=True)
-
-
-
-
+# Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-cola, colb = st.columns(2)
-with cola:
-    with st.container(border=True, height=800):
-        col1, col2 = st.columns(2)
+if "display_mode" not in st.session_state:
+    st.session_state.display_mode = "chat"
 
-        with col1:
-            user_input=st.chat_input("Say something")
-            # add user_input to session state
-            if user_input:
-                st.session_state.messages.append(user_input)
+# Function to get chat response (streaming)
+def get_chat_response_streaming(user_message, instructions_prompt, model="gpt-3.5-turbo", client=None):
+    if client is None:
+        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    
+    messages = [
+        {"role": "system", "content": instructions_prompt},
+        {"role": "user", "content": user_message}
+    ]
+    
+    stream = client.chat.completions.create(model=model, messages=messages, stream=True)
+    return stream
 
+# Function to extract letter content
+def extract_letter_content(text):
+    pattern = r'<letter>(.*?)</letter>'
+    matches = re.findall(pattern, text, re.DOTALL)
+    return matches
+
+# Function to handle new messages
+def handle_new_message(user_input):
+    # Add user message to chat history
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    
+    # Get AI response
+    with st.chat_message("assistant"):
+        message_placeholder = st.empty()
+        full_response = ""
+        for chunk in get_chat_response_streaming(user_input, "You are a helpful assistant."):
+            full_response += chunk.choices[0].delta.content or ""
+            message_placeholder.markdown(full_response + "▌")
+        message_placeholder.markdown(full_response)
+    
+    # Add assistant response to chat history
+    st.session_state.messages.append({"role": "assistant", "content": full_response})
+    
+    # Check for letter tags
+    letter_content = extract_letter_content(full_response)
+    if letter_content:
+        st.session_state.display_mode = "split"
+        st.session_state.letter_content = letter_content
+        st.rerun()
+
+# Main app layout
+def main():
+    if st.session_state.display_mode == "chat":
+        col1, col2, col3 = st.columns([1, 3, 1])
+        
         with col2:
+            st.title("Chat Interface")
+            
+            # Display chat messages
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+            
+            # Chat input
+            user_input = st.chat_input("Type your message here...")
+            
             if user_input:
-                # display all messages in session state, ie history so iterate over list
+                handle_new_message(user_input)
+    
+    elif st.session_state.display_mode == "split":
+        cola, colb = st.columns(2)
+        
+        with cola:
+            st.title("Chat History")
+            # Display chat messages
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+            
+            # Chat input in split view
+            user_input = st.chat_input("Type your message here...")
+            
+            if user_input:
+                handle_new_message(user_input)
+        
+        with colb:
+            st.title("Letter Content")
+            for content in st.session_state.letter_content:
+                st.markdown(content)
+        
+        if st.button("Return to Chat"):
+            st.session_state.display_mode = "chat"
+            st.rerun()
 
-                for message in st.session_state.messages:
-                    st.chat_message(user_input)
-            else:
-                st.write("No input from user yet")
-
-with colb:
-
-    with st.container(border=True, height=800):
-        st.write("This is outside the if block")
+if __name__ == "__main__":
+    main()
