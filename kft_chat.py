@@ -5,10 +5,12 @@ from openai import OpenAI
 import os
 from streamlit_star_rating import st_star_rating
 import datetime
+import html
 
 current_date = datetime.date.today()
 
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
+# os.environ["TOKENIZERS_PARALLELISM"] = "false"
+st.set_page_config(page_title="Kommunens Chatbot", page_icon=":robot_face:", layout="wide")
 
 openai_api_key = st.secrets['OPENAI_API_KEY']
 qdrant_api_key = st.secrets['qdrant_api_key']
@@ -26,7 +28,7 @@ def generate_embeddings(text):
     return response.data[0].embedding
 
 def search_collection(qdrant_client, collection_name, user_query_embedding):
-    response = qdrant_client.search(collection_name=collection_name, query_vector=user_query_embedding, limit=3, with_payload=True)
+    response = qdrant_client.search(collection_name=collection_name, query_vector=user_query_embedding, limit=10, with_payload=True)
     return response
 
 def get_chat_response_streaming(user_message, extra_knowledge, instructions_prompt, model="gpt-4o", client=None):
@@ -52,16 +54,9 @@ def get_chat_response_streaming(user_message, extra_knowledge, instructions_prom
         full_response += chunk.choices[0].delta.content
         message_placeholder.markdown(full_response + "▌")
 
-def format_output(similar_texts, answer):
-    text = f"Generated Response:\n{answer}\n\nSimilar Texts Found:\n"
-    for index, (text_content, source, score) in enumerate(similar_texts):
-        text += f"Resultat {index + 1} - Källa: {source}, Träffsäkerhet: {score}, Text: {text_content}\n"
-    return text
-
 def clear_form():
     st.session_state['user_input'] = ""
     st.session_state['extra_knowledge'] = ""
-    # Remove the default value settings for checkboxes
     if 'use_hemsidan' in st.session_state:
         del st.session_state['use_hemsidan']
     if 'use_mediawiki' in st.session_state:
@@ -69,7 +64,6 @@ def clear_form():
 
 st.title("Demo KFT - utkastsgenererare")
 
-# Add a button to clear the form
 if st.button("Rensa formulär"):
     clear_form()
 
@@ -78,7 +72,6 @@ with st.form(key='user_query_form', clear_on_submit=False):
     st.caption("Svaren genereras av en AI-bot, som kan begå misstag. Frågor och svar lagras i utvecklingssyfte. Skriv inte personuppgifter i fältet.")
     extra_knowledge = st.text_area("Klistra in extra kontext/kunskap/fakta/instruktioner här:", key="extra_knowledge", height=100, placeholder="Hänvisa till Falkenbergs kommuns bestämmelser för stöd till föreningsvlivet och bla bla bla")
 
-    # Add checkboxes for collection selection
     st.write("Välj vilka samlingar som ska användas för sökning:")
     use_hemsidan = st.checkbox("Falkenbergs kommuns hemsida", value=True, key="use_hemsidan")
     use_mediawiki = st.checkbox("MediaWiki - KFT: Intern dokumentation", value=True, key="use_mediawiki")
@@ -94,9 +87,9 @@ if submit_button and user_input:
     if use_hemsidan:
         search_results2 = search_collection(qdrant_client, collection_name2, user_embedding)
         for result in search_results2:
-            source_info = f"{result.payload['title']} (URL: {result.payload['url']})"
+            source_info = html.escape(f"{result.payload['title']} (URL: {result.payload['url']})")
             combined_results.append({
-                'text': result.payload['chunk'],
+                'text': html.escape(result.payload['chunk']),
                 'source': source_info,
                 'score': result.score,
                 'category': 'hemsidan'
@@ -107,23 +100,18 @@ if submit_button and user_input:
         search_results3 = search_collection(qdrant_client, collection_name3, user_embedding)
         for result in search_results3:
             combined_results.append({
-                'text': result.payload['chunk'],
-                'source': result.payload['title'],
+                'text': html.escape(result.payload['chunk']),
+                'source': html.escape(result.payload['title']),
                 'score': result.score,
                 'category': 'interndokumentation'
             })
         used_collections.append("Intern dokumentation")
 
     ranked_results = sorted(combined_results, key=lambda x: x['score'], reverse=True)
-
-    if ranked_results:
-        with st.expander("Se relevanta källor"):
-            for index, result in enumerate(ranked_results):
-                st.write(f"Resultat {index + 1}:")
-                st.write("Källa:", result['source'])
-                st.write("Träffsäkerhet:", result['score'])
-                st.code(f"Text från dokument:\n{result['text']}")
-                st.write("---")
+    
+    # Store the ranked results in the session state
+    st.session_state['ranked_results'] = ranked_results
+    st.session_state['used_collections'] = used_collections
 
     context_from_db = ", ".join([
         f"{result['text']} (Category: {result['category']}, Source: {result['source']})"
@@ -141,24 +129,61 @@ Oavsett du har rätt fakta eller inte till invånaren ska du svara koncist, to t
 Observera att följande samlingar användes för sökningen: {', '.join(used_collections)}.
 """
 
-    answer = get_chat_response_streaming(user_input, extra_knowledge, instructions_prompt)
+    st.session_state['original_response'] = get_chat_response_streaming(user_input, extra_knowledge, instructions_prompt)
+
+# Display the sources in the expander with two columns
+if 'ranked_results' in st.session_state and st.session_state['ranked_results']:
+    with st.expander("Se relevanta källor"):
+        col1, col2 = st.columns(2)
+        for index, result in enumerate(st.session_state['ranked_results']):
+            with col1 if index % 2 == 0 else col2:
+                st.write(f"Resultat {index + 1}:")
+                st.write("Källa:", result['source'])
+                st.write("Träffsäkerhet:", result['score'])
+                st.write(f"Text från dokument:\n{result['text']}")
+                st.write("---")
+
+# Modify the section handling the "Förbättra svaret" button
+if 'original_response' in st.session_state and st.session_state['original_response']:
+    st.markdown("### Ytterligare instruktioner")
+    additional_instructions = st.text_area("Ange ytterligare instruktioner för att förbättra svaret:", key="additional_instructions")
+    
+    if st.button("Förbättra svaret"):
+        new_instructions_prompt = f"""
+        Här är det ursprungliga svaret:
+
+        {st.session_state['original_response']}
+
+        Användaren har gett följande ytterligare instruktioner: {additional_instructions}
+
+        Vänligen modifiera det ursprungliga svaret baserat på dessa instruktioner. Håll det ursprungliga formatet med 'Hej Namn,' i början och 'Med vänliga hälsningar, [Namn], [Avdelning på kommunen]' i slutet.
+        """
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("### Ursprungligt svar:")
+            st.write(st.session_state['original_response'])
+        with col2:
+            st.markdown("### Förbättrat svar")
+            st.session_state['improved_response'] = get_chat_response_streaming("", "", new_instructions_prompt)
+        st.session_state['response_completed'] = True
+        st.session_state['final_response'] = st.session_state['improved_response']
 
 if 'response_completed' in st.session_state and st.session_state['response_completed']:
     with st.form(key='user_feedback_form', clear_on_submit=True):
         stars = st_star_rating("Hur nöjd är du med svaret", maxValue=5, defaultValue=3, key="rating")
         user_feedback = st.text_area("Vad var bra/mindre bra?")
         feedback_submit_button = st.form_submit_button("Skicka")
-        print(user_input)
 
-    if feedback_submit_button and user_input:
-        print(st.session_state['record_id'])
+    if feedback_submit_button:
         if 'record_id' in st.session_state and st.session_state['record_id']:
-            update_data = {"user_rating": stars, "user_feedback": user_feedback}
+            update_data = {
+                "user_rating": stars, 
+                "user_feedback": user_feedback,
+                "response": st.session_state.get('final_response', st.session_state['original_response'])
+            }
             update_url = f"{directus_api_url}/{st.session_state['record_id']}"
             headers = {"Content-Type": "application/json"}
             params = {"access_token": st.secrets["directus_token"]}
-            print(update_url)
-            print(user_input)
 
             update_response = requests.patch(update_url, json=update_data, headers=headers, params=params)
 

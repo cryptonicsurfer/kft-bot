@@ -7,6 +7,20 @@ import json
 # Set page config
 st.set_page_config(page_title="AI Chat with Qdrant Search", layout="wide")
 
+# Create custom CSS
+css = """
+<style>
+    [data-testid="column"] {
+        border: 1px solid #ddd;
+        padding: 10px;
+        border-radius: 5px;
+    }
+</style>
+"""
+
+# Inject custom CSS with st.markdown
+st.markdown(css, unsafe_allow_html=True)
+
 
 # Set up OpenAI and Qdrant clients
 openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -148,7 +162,7 @@ with st.sidebar:
         st.write("No tool calls made yet.")
 
 # Create two columns
-col1, col2 = st.columns(2)
+col1, col2 = st.columns(2, vertical_alignment="bottom")
 
 # Custom CSS to align columns
 st.markdown("""
