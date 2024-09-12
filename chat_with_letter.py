@@ -2,7 +2,8 @@ import streamlit as st
 from openai import OpenAI
 import re
 
-SYSTEM_MESSAGE = {"role": "system", "content": "Du är en hjälpsam assistent som ibland svarar med ett separat brev markerat inom tags <letter>[letter content in markdown]</letter>"}
+SYSTEM_MESSAGE = {"role": "system", 
+                  "content": "Du är en hjälpsam assistent som ibland svarar med ett separat brev markerat inom tags <letter>[letter content in markdown]</letter>"}
 
 # Set page config
 st.set_page_config(layout="wide")
