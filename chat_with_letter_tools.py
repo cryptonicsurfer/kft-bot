@@ -17,7 +17,7 @@ qdrant_client = QdrantClient(url=st.secrets["qdrant_url"], port=443, api_key=st.
 
 
 # Define the GPT model to be used
-GPT_MODEL = "gpt-4o-mini"
+GPT_MODEL = "gpt-4o"
 EMBEDDING_MODEL = "text-embedding-3-large"
 
 # Function to safely parse JSON
