@@ -46,7 +46,7 @@ def generate_embeddings(text):
         return None
 
 # Function to search Qdrant
-def search_collection(qdrant_client, collection_name, user_query_embedding, limit=5):
+def search_collection(qdrant_client, collection_name, user_query_embedding, limit=3):
     try:
         response = qdrant_client.search(
             collection_name=collection_name,
@@ -114,6 +114,8 @@ if 'messages' not in st.session_state:
     st.session_state['messages'] = []
 if 'letters' not in st.session_state:
     st.session_state['letters'] = ['']
+if 'selected_letter' not in st.session_state:
+    st.session_state['selected_letter'] = -1
 if 'letter_placeholder' not in st.session_state:
     st.session_state['letter_placeholder'] = ''
 if 'current_tool_call' not in st.session_state:
@@ -122,11 +124,10 @@ if 'current_tool_call' not in st.session_state:
 
 
 
-
 # initial_input = st.text_area("Skriv in medborgarfråga/synpunkt")
 SYSTEM_MESSAGE = {
     "role": "system",
-    "content": "Du är en hjälpsam assistent som hjälper en kommunanställd att författa ett svar till en invånare. Givet invånarfrågan, sammanställ relevant fakta på ett lättläst sätt, samt ge ett utkast på hur ett svar skulle kunna se ut. Ditt svar riktas till en anställd på kommunen och ska utgöra ett stöd för den anställde att återkoppla direkt till den som ställer frågan. Om du har rätt fakta för att ge ett korrekt svar, skriv det. Om inte, skriv att kommunen har tagit emot synpunkten och diariefört den men att det inte är säkert att det finns resurser att prioritera just denna fråga. Inkludera alltid källor. Svara vänligt men kortfattat. Svaret börjar med: 'Hej Namn,' och avslutas med: 'Med vänliga hälsningar, [Namn], [Avdelning på kommunen]'. Svaret ska formateras i markdown och markeras inom tags <letter>[letter content in markdown]</letter>."
+    "content": "Du är en hjälpsam assistent som hjälper en kommunanställd att författa ett svar till en invånare. Givet invånarfrågan, sammanställ relevant fakta på ett lättläst sätt, samt ge ett utkast på hur ett svar skulle kunna se ut. Ditt svar riktas till en anställd på kommunen och ska utgöra ett stöd för den anställde att återkoppla direkt till den som ställer frågan. Om du har rätt fakta för att ge ett korrekt svar, skriv det. Om inte, skriv att kommunen har tagit emot synpunkten och diariefört den men att det inte är säkert att det finns resurser att prioritera just denna fråga. Inkludera alltid källor. Svara vänligt men kortfattat. Svaret börjar med: 'Hej Namn,' och avslutas med: 'Med vänliga hälsningar, [Namn], [Avdelning på kommunen]'. Svaret ska formateras i markdown och markeras inom tags <letter>[letter content in markdown]</letter>. Svaret ska aldrig hänvisa tillbaka till en specifik person, hänvisa om nödvändigt till kontaktcenter  Tel: 0346-88 60 00 Mejl: kontaktcenter@falkenberg.se"
 }
 
 cola, colb = st.columns(2)
@@ -285,4 +286,4 @@ with cola:
         with st.container(border=True, height=600):
             st.write(st.session_state['letter_placeholder'].replace('</letter',''))
             if st.session_state.letter_placeholder == '':
-                st.write(st.session_state.letters[-1].replace('</letter',''))
+                st.write(st.session_state.letters[st.session_state['selected_letter']].replace('</letter',''))
