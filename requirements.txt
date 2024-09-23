@@ -5,4 +5,3 @@ sentence-transformers
 streamlit
 requests
 st-star-rating
-pyperclip

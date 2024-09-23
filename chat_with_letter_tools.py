@@ -25,7 +25,7 @@ def safe_json_loads(json_string):
     # Split the JSON string if multiple JSON objects are concatenated
     json_objects = re.findall(r'\{.*?\}(?=\{|\Z)', json_string)
     all_arguments = []
-    
+
     for obj in json_objects:
         try:
             parsed = json.loads(obj)
@@ -33,9 +33,9 @@ def safe_json_loads(json_string):
         except json.JSONDecodeError:
             st.warning(f"Error parsing JSON from function arguments: {obj}. Using empty dict.")
             all_arguments.append({})
-    
+
     return all_arguments
-    
+
 # Function to generate embeddings
 def generate_embeddings(text):
     try:
@@ -142,17 +142,17 @@ with cola:
                 if '<letter>' in message["content"] and '</letter>' in message["content"]:
                     # Split the content into parts
                     parts = re.split(r'(<letter>.*?</letter>)', message["content"], flags=re.DOTALL)
-                    
+
                     # Display content before the letter
                     if parts[0].strip():
                         st.markdown(parts[0].strip())
-                    
+
                     # Extract and display the letter content
                     letter_content = re.search(r'<letter>(.*?)</letter>', parts[1], re.DOTALL)
                     if letter_content:
                         with st.expander("Brev"):
                             st.markdown(letter_content.group(1))
-                    
+
                     # Display content after the letter
                     if len(parts) > 2 and parts[2].strip():
                         st.markdown(parts[2].strip())
@@ -160,7 +160,7 @@ with cola:
                     # If there's no letter tag, display the content as is
                     st.markdown(message["content"])
 
-        
+
         if user_input:
             # Add user's message to session state
             st.session_state.messages.append({"role": "user", "content": user_input})
@@ -175,7 +175,7 @@ with cola:
                 completion = openai_client.chat.completions.create(
                     model=GPT_MODEL,
                     messages=[SYSTEM_MESSAGE] + [
-                        {"role": m["role"], 
+                        {"role": m["role"],
                         "content": m["content"],
                         **({"name": m["name"]} if m["role"] == "function" else {})
                         }
@@ -186,8 +186,8 @@ with cola:
                     temperature=0.2,
                     tool_choice="auto",
                 )
-                
-                
+
+
                 # Handle text completions
                 for chunk in completion:
                     # Handle tool call
@@ -195,11 +195,11 @@ with cola:
                     if choice.delta.tool_calls:
 
                         tool_call = choice.delta.tool_calls[0]
-                        
+
                         # Accumulate tool call arguments
                         if tool_call.function.arguments is not None:
                             st.session_state['current_tool_call']['arguments'] += tool_call.function.arguments
-                        
+
                         # Capture the tool call function name
                         if tool_call.function.name is not None:
                             st.session_state['current_tool_call']['name'] = tool_call.function.name
@@ -228,7 +228,7 @@ with cola:
                         completion = openai_client.chat.completions.create(
                             model=GPT_MODEL,
                             messages=[SYSTEM_MESSAGE] + [
-                                {"role": m["role"], 
+                                {"role": m["role"],
                                 "content": m["content"],
                                 **({"name": m["name"]} if m["role"] == "function" else {})
                                 }
@@ -242,16 +242,16 @@ with cola:
                         )
                         for chunk in completion:
                             choice = chunk.choices[0]
-                            if choice.finish_reason == "stop": 
+                            if choice.finish_reason == "stop":
                                 message_placeholder.markdown(message_response)
-                                if st.session_state.letter_placeholder != '': 
+                                if st.session_state.letter_placeholder != '':
                                     st.session_state.letters.append(st.session_state.letter_placeholder)
                                 st.session_state.letter_placeholder = ''
                                 break
 
                             if choice.delta.content:
                                 full_response += choice.delta.content
-                            
+
                                 if '<letter>' in full_response and '</letter>' not in full_response:
                                     message_response = message_response.replace('<letter','Skriver brev...')
                                     st.session_state.letter_placeholder += choice.delta.content
@@ -260,16 +260,16 @@ with cola:
                                 message_placeholder.markdown(message_response + "▌")
                         break
 
-                    if choice.finish_reason == "stop": 
+                    if choice.finish_reason == "stop":
                         message_placeholder.markdown(message_response)
-                        if st.session_state.letter_placeholder != '': 
+                        if st.session_state.letter_placeholder != '':
                             st.session_state.letters.append(st.session_state.letter_placeholder)
                         st.session_state.letter_placeholder = ''
                         break
 
                     if choice.delta.content:
                         full_response += choice.delta.content
-                    
+
                         if '<letter>' in full_response and '</letter>' not in full_response:
                             message_response = message_response.replace('<letter','Skriver brev...')
                             st.session_state.letter_placeholder += choice.delta.content
@@ -288,11 +288,5 @@ with cola:
                 letter_content = st.session_state.letters[-1].replace('</letter', '').replace('>','')
             else:
                 letter_content = ""
-            
-            st.write(letter_content)
-            
-            # Add copy button at the bottom of colb
-            if letter_content:
-                if st.button("📋 Kopiera"):
-                    pyperclip.copy(letter_content)
-                    st.success("✅ Brevet har kopierats till urklipp!")
+
+            st.code(letter_content, wrap_lines=True)
