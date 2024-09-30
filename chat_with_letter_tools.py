@@ -3,7 +3,6 @@ from openai import OpenAI
 from qdrant_client import QdrantClient
 import re
 import json
-import pyperclip
 
 # Set page config
 st.set_page_config(layout="wide")
