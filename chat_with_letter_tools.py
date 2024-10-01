@@ -66,7 +66,7 @@ def search_qdrant(user_input: str='', limit: int = 3):
     if user_query_embedding is None:
         return []
 
-    results = search_collection(qdrant_client, 'FalkenbergsKommunsHemsida_1000char_chunks', user_query_embedding, limit)
+    results = search_collection(qdrant_client, 'FalkenbergsKommunsHemsida', user_query_embedding, limit)
     results2 = search_collection(qdrant_client, 'mediawiki', user_query_embedding, limit)
     formatted_results = []
     for result in results:
