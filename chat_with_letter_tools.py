@@ -3,17 +3,20 @@ from openai import OpenAI
 from qdrant_client import QdrantClient
 import re
 import json
+import requests
 
 # Set page config
 st.set_page_config(layout="wide")
 
 # Set the title of the Streamlit app
 st.title("KFT utkastgenereraren")
+st.write("För att upprätthålla informationssäkerheten, skriv inte in personuppgifter eller känslig information i denna tjänst")
 
 # Load OpenAI API key from Streamlit secrets
 openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 qdrant_client = QdrantClient(url=st.secrets["qdrant_url"], port=443, api_key=st.secrets["qdrant_api_key"])
-
+directus_api_url = "https://nav.utvecklingfalkenberg.se/items/kft_bot"
+directus_params = {"access_token": st.secrets['directus_token']}
 
 # Define the GPT model to be used
 GPT_MODEL = "gpt-4o"
@@ -82,6 +85,29 @@ def search_qdrant(user_input: str='', limit: int = 3):
 
     return formatted_results
 
+def submit_feedback(user_rating, user_feedback):
+    directus_api_url = "https://nav.utvecklingfalkenberg.se/items/kft_bot"
+    directus_params = {"access_token": st.secrets['directus_token']}
+    chat_history = "\n".join([
+        f"{m['role']}: {m['content']}" 
+        for m in st.session_state.messages 
+        if m['role'] != 'function'
+    ])
+    data = {
+        "prompt": chat_history,
+        "user_rating": user_rating,
+        "user_feedback": user_feedback
+    }
+    
+    try:
+        response = requests.post(directus_api_url, json=data, params=directus_params)
+        response.raise_for_status()
+        return True
+    except requests.RequestException as e:
+        st.error(f"Error submitting feedback: {str(e)}")
+        return False
+    
+
 # Set up tools
 tools = [
     {
@@ -106,6 +132,28 @@ tools = [
                 "required": ["user_input"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "submit_feedback",
+            "description": "Submit user feedback to the CMS. Om du inte har tillräckligt information - fråga vilken feedback de vill lämna. Ranking 1-5.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "user_rating": {
+                        "type": "integer",
+                        "description": "User rating (1-5 stars)",
+                        "enum": [1,2,3,4,5]
+                    },
+                    "user_feedback": {
+                        "type": "string",
+                        "description": "User's textual feedback"
+                    }
+                },
+                "required": ["user_rating", "user_feedback"]
+            }
+        }
     }
 ]
 
@@ -124,7 +172,7 @@ if 'current_tool_call' not in st.session_state:
 
 SYSTEM_MESSAGE = {
     "role": "system",
-    "content": "Du är en hjälpsam assistent som hjälper en kommunanställd att författa ett svar till en invånare. Givet invånarfrågan, sammanställ relevant fakta på ett lättläst sätt, samt ge ett utkast på hur ett svar skulle kunna se ut. Ditt svar riktas till en anställd på kommunen och ska utgöra ett stöd för den anställde att återkoppla direkt till den som ställer frågan. Om du har rätt fakta för att ge ett korrekt svar, skriv det. Om inte, skriv att kommunen har tagit emot synpunkten och diariefört den men att det inte är säkert att det finns resurser att prioritera just denna fråga. Inkludera alltid källor. Svara vänligt men kortfattat. Svaret börjar med: 'Hej Namn,' och avslutas med: 'Med vänliga hälsningar, [Namn], [Avdelning på kommunen]'. Svaret ska formateras i markdown och markeras inom tags <letter>[letter content in markdown]</letter>, efter closing tag lista länk till källorna som du har baserat ditt svar på. Svaret ska aldrig hänvisa tillbaka till en specifik person, hänvisa om nödvändigt till kontaktcenter  Tel: 0346-88 60 00 Mejl: kontaktcenter@falkenberg.se."
+    "content": "Du är en hjälpsam assistent som hjälper en kommunanställd att författa ett svar till en invånare. Givet invånarfrågan, sammanställ relevant fakta på ett lättläst sätt, samt ge ett utkast på hur ett svar skulle kunna se ut. Ditt svar riktas till en anställd på kommunen och ska utgöra ett stöd för den anställde att återkoppla direkt till den som ställer frågan. Om du har rätt fakta för att ge ett korrekt svar, skriv det. Om inte, skriv att kommunen har tagit emot synpunkten och diariefört den men att det inte är säkert att det finns resurser att prioritera just denna fråga. Inkludera alltid källor. Svara vänligt men kortfattat. Svaret börjar med: 'Hej Namn,' och avslutas med: 'Med vänliga hälsningar, [Namn], [Avdelning på kommunen]'. Svaret ska formateras i markdown och markeras inom tags <letter>[letter content in markdown]</letter>, efter closing tag lista länk till källorna som du har baserat ditt svar på. Svaret ska aldrig hänvisa tillbaka till en specifik person, hänvisa om nödvändigt till kontaktcenter  Tel: 0346-88 60 00 Mejl: kontaktcenter@falkenberg.se. När du är ombedd kan du samla in feedback från användaren. Bekräfta för användaren om du har skickat in feedback."
 }
 
 cola, colb = st.columns(2)
@@ -220,6 +268,16 @@ with cola:
                                     "name": "search_qdrant",
                                     "content": json.dumps(search_results)
                                 })
+                            elif function_name == "submit_feedback":
+                                success = submit_feedback(function_args['user_rating'], function_args['user_feedback'])
+                                st.session_state.messages.append({
+                                    "role": "function",
+                                    "name": "submit_feedback",
+                                    "content": json.dumps({"success": success})
+                                })
+                                # Add a message to the chat indicating that feedback is being submitted
+                                message_response += "Skickar in feedback...\n"
+                                message_placeholder.markdown(message_response + "▌")
 
                         # Reset tool call state for future calls
                         st.session_state['current_tool_call'] = {'name': None, 'arguments': ''}
@@ -288,4 +346,4 @@ with cola:
             else:
                 letter_content = ""
 
-            st.code(letter_content, wrap_lines=True)
+            st.write(letter_content)
