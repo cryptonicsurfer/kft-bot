@@ -50,13 +50,13 @@ def generate_embeddings(text):
 # Function to search Qdrant
 def search_collection(qdrant_client, collection_name, user_query_embedding, limit=3):
     try:
-        response = qdrant_client.search(
+        response = qdrant_client.query_points(
             collection_name=collection_name,
-            query_vector=user_query_embedding,
+            query=user_query_embedding,
             limit=limit,
             with_payload=True
         )
-        return response
+        return response.points
     except Exception as e:
         st.error(f"Error searching Qdrant collection: {str(e)}")
         return []
