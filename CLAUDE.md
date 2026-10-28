@@ -2,9 +2,11 @@
 
 Streamlit-app för att hjälpa kommunanställda skriva svar till invånare. Deployad via Streamlit Community Cloud (hämtar automatiskt från GitHub main).
 
+**Ska portas till Next.js** — läs `NEXTJS-MIGRATION.md` innan du gör något annat.
+
 ## Tech Stack
 - Streamlit
-- OpenAI (GPT-4o + text-embedding-3-large)
+- OpenAI (GPT-4o i dag → gpt-6.1-sol/terra/luna i Next.js-versionen; text-embedding-3-large)
 - Qdrant (vektorsök)
 - Directus CMS (feedback)
 
